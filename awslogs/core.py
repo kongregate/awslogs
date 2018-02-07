@@ -6,8 +6,10 @@ import errno
 from datetime import datetime, timedelta
 from collections import deque
 
-import boto3
 from botocore.compat import json, six, total_seconds
+from botocore.session import Session
+from botocore.credentials import create_credential_resolver
+from botocore.credentials import JSONFileCache
 
 import jmespath
 
@@ -35,9 +37,6 @@ class AWSLogs(object):
 
     def __init__(self, **kwargs):
         self.aws_region = kwargs.get('aws_region')
-        self.aws_access_key_id = kwargs.get('aws_access_key_id')
-        self.aws_secret_access_key = kwargs.get('aws_secret_access_key')
-        self.aws_session_token = kwargs.get('aws_session_token')
         self.log_group_name = kwargs.get('log_group_name')
         self.log_stream_name = kwargs.get('log_stream_name')
         self.filter_pattern = kwargs.get('filter_pattern')
@@ -54,11 +53,13 @@ class AWSLogs(object):
         if self.query is not None:
             self.query_expression = jmespath.compile(self.query)
         self.log_group_prefix = kwargs.get('log_group_prefix')
-        self.client = boto3.client(
+
+        session = Session()
+        cred_chain = session.get_component('credential_provider')
+        provider = cred_chain.get_provider('assume-role')
+        provider.cache = JSONFileCache(os.path.expanduser(os.path.join('~', '.aws', 'cli', 'cache')))
+        self.client = session.create_client(
             'logs',
-            aws_access_key_id=self.aws_access_key_id,
-            aws_secret_access_key=self.aws_secret_access_key,
-            aws_session_token=self.aws_session_token,
             region_name=self.aws_region
         )
 
